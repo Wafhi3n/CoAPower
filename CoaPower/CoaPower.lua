@@ -1,4 +1,4 @@
--- CoaPower.lua
+﻿-- CoaPower.lua
 -- Multi-class buff tracker â€” class rows, range check, chain cast, expiry timers
 -- Ascension 3.3.5
 
@@ -40,6 +40,7 @@ local DB_DEFAULTS = {
     verbose      = false,             -- false = suppress confirmation messages
     classConfig  = {},                -- [classToken] = { [1]=bool, [2]=bool, [3]=bool }
     spellsByClass= {},                -- [classToken] = {spellName,...} (user overrides)
+    activeSpell  = {},                -- [classToken] = spell slot index (1..MAX_SPELLS)
 }
 
 -- â”€â”€ UI sizing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -62,7 +63,9 @@ local mainFrame   = nil
 local secureHost  = nil  -- UIParent child, SetAllPoints(mainFrame) â€” isolates secure buttons from mainFrame
 local configFrame = nil
 local headerIcons = {}
-local rowPool     = {}   -- [classToken] = row frame
+local rowPool        = {}   -- [classToken] = row frame
+local playerRowPool  = {}   -- [uid]        = player sub-row frame
+local expandedClasses = {}  -- [classToken] = bool  (runtime, not saved)
 
 local UpdateUI   -- forward declaration
 
@@ -265,6 +268,33 @@ local function CycleClassConfig(classToken, delta)
 end
 
 -- â”€â”€ Config window â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+-- Returns the active spell index for a class (collapsed single-button display)
+local function GetActiveSpellIdx(classToken)
+    local idx = db.activeSpell and db.activeSpell[classToken]
+    if idx and spells[idx] then return idx end
+    local cfg = GetClassCfg(classToken)
+    for i = 1, MAX_SPELLS do
+        if spells[i] and cfg[i] then return i end
+    end
+    return 1
+end
+
+-- Cycles to the next enabled spell (scroll wheel on class header)
+local function CycleActiveSpell(classToken)
+    if not db.activeSpell then db.activeSpell = {} end
+    local cfg     = GetClassCfg(classToken)
+    local current = GetActiveSpellIdx(classToken)
+    for k = 1, MAX_SPELLS do
+        local next = current % MAX_SPELLS + 1
+        current    = next
+        if spells[next] and cfg[next] then
+            db.activeSpell[classToken] = next
+            return
+        end
+    end
+end
+
 local CFG_CORNER_W = 148
 local CFG_COL_W    = 72
 local CFG_ROW_H    = 26
@@ -482,6 +512,16 @@ local function GetOrCreateClassRow(classToken)
     lbl:SetJustifyH("LEFT")
     row.lbl = lbl
 
+    -- Transparent button over the label area — left-click to expand/collapse
+    local expandBtn = CreateFrame("Button", nil, mainFrame)
+    expandBtn:SetPoint("LEFT", row, "LEFT", 0, 0)
+    expandBtn:SetSize(NAME_W, ROW_H)
+    expandBtn:SetScript("OnClick", function()
+        expandedClasses[classToken] = not expandedClasses[classToken]
+        UpdateUI()
+    end)
+    row.expandBtn = expandBtn
+
     -- Buff buttons (MAX_SPELLS slots, shown/hidden per class config)
     row.btns = {}
     for i = 1, MAX_SPELLS do
@@ -540,7 +580,7 @@ local function GetOrCreateClassRow(classToken)
             print("|cffFFD700CoaPower|r: cannot change config during combat.")
             return
         end
-        CycleClassConfig(self._classToken, delta)
+        CycleActiveSpell(self._classToken)
         UpdateUI()
     end)
 
@@ -548,7 +588,64 @@ local function GetOrCreateClassRow(classToken)
     return row
 end
 
--- â”€â”€ UI update â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- Player sub-row factory  (one row per member when class is expanded)
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+local function GetOrCreatePlayerRow(uid)
+    if playerRowPool[uid] then return playerRowPool[uid] end
+
+    local row = CreateFrame("Frame", nil, mainFrame)
+    row:SetHeight(ROW_H)
+    row:EnableMouse(false)
+
+    local lbl = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    lbl:SetPoint("LEFT", row, "LEFT", 14, 0)
+    lbl:SetWidth(NAME_W - 16)
+    lbl:SetJustifyH("LEFT")
+    row.lbl = lbl
+
+    row.btns = {}
+    for i = 1, MAX_SPELLS do
+        local btn = CreateFrame("Button", nil, secureHost, "SecureActionButtonTemplate")
+        btn:SetSize(ICON_SIZE, ICON_SIZE)
+        btn:SetFrameStrata("HIGH")
+        btn:RegisterForClicks("LeftButtonUp")
+        btn:SetAttribute("type", "macro")
+        btn:SetAttribute("macrotext", "")
+        btn:Hide()
+
+        local tex = btn:CreateTexture(nil, "ARTWORK")
+        tex:SetAllPoints()
+        btn.iconTex = tex
+
+        local tmr = btn:CreateFontString(nil, "OVERLAY")
+        tmr:SetFont("Fonts\\FRIZQT__.TTF", 7, "OUTLINE")
+        tmr:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 1, 0)
+        tmr:SetTextColor(1, 0.8, 0)
+        tmr:Hide()
+        btn.timerTxt = tmr
+
+        local spellIdx = i
+        btn:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            local sn = spells[spellIdx]
+            if sn then GameTooltip:AddLine(sn, 1, 1, 0) end
+            local pname = UnitName(uid)
+            if pname then GameTooltip:AddLine(pname, 0.8, 0.8, 1) end
+            GameTooltip:Show()
+        end)
+        btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+        row.btns[i] = btn
+    end
+
+    playerRowPool[uid] = row
+    return row
+end
+
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- UI update  (collapsed class rows + expanded per-player sub-rows)
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 UpdateUI = function()
     if not mainFrame or not mainFrame:IsShown() or not isActive then return end
 
@@ -569,10 +666,9 @@ UpdateUI = function()
         end
     end
 
-    -- Rebuild class membership from current roster
     RebuildClassRows()
 
-    -- Determine which class rows are visible
+    -- Determine visible classes
     local visible = {}
     for _, token in ipairs(classRows) do
         local cfg = GetClassCfg(token)
@@ -580,8 +676,7 @@ UpdateUI = function()
         for i = 1, #spells do
             if cfg[i] then anyEnabled = true; break end
         end
-        -- When all spells disabled: keep row visible so mousewheel can re-enable
-        local inRange = not anyEnabled  -- treat "off" rows as always in-range for display
+        local inRange = not anyEnabled
         if anyEnabled then
             for i = 1, #spells do
                 if cfg[i] and AnyInRange(token, i) then inRange = true; break end
@@ -592,20 +687,24 @@ UpdateUI = function()
         end
     end
 
-    -- Resize frame to fit rows
-    local newH = HEADER_H + #visible * ROW_H + PAD * 2
-    mainFrame:SetHeight(math.max(newH, HEADER_H + PAD * 2))
+    -- Track what is rendered this pass (for cleanup)
+    local shownTokens = {}
+    local shownUIDs   = {}
 
-    -- Populate rows
-    for idx, entry in ipairs(visible) do
+    -- Layout with a running Y cursor (rows vary in count when expanded)
+    local currentY = HEADER_H + PAD
+
+    for _, entry in ipairs(visible) do
         local token = entry.token
-        local row   = GetOrCreateClassRow(token)
-        row:SetWidth(frameW - 8)
-        row:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 4,
-                     -(HEADER_H + (idx - 1) * ROW_H + PAD))
-        row:Show()
+        shownTokens[token] = true
 
-        -- Dim row if no member is in range, or more if intentionally disabled
+        local row = GetOrCreateClassRow(token)
+        row:SetWidth(frameW - 8)
+        row:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 4, -currentY)
+        row:Show()
+        if row.expandBtn then row.expandBtn:SetSize(NAME_W, ROW_H) end
+
+        -- Row alpha
         local anyEnabled = entry.anyEnabled
         if not anyEnabled then
             row:SetAlpha(0.35)
@@ -615,63 +714,49 @@ UpdateUI = function()
             row:SetAlpha(0.40)
         end
 
-        -- Class name colored by class color
+        -- Class label  (\226\150\188 = â–¼, \226\150\182 = â–¶)
         local members   = classMembers[token]
         local className = token
-        if members and members[1] then
-            className = UnitClass(members[1]) or token
-        end
+        if members and members[1] then className = UnitClass(members[1]) or token end
         local cc = RAID_CLASS_COLORS and RAID_CLASS_COLORS[token]
-        if cc then
-            row.lbl:SetTextColor(cc.r, cc.g, cc.b)
-        else
-            row.lbl:SetTextColor(1, 1, 1)
-        end
-
-        -- Count members needing any enabled spell + build label
+        if cc then row.lbl:SetTextColor(cc.r, cc.g, cc.b) else row.lbl:SetTextColor(1, 1, 1) end
         local cfg = GetClassCfg(token)
         local totalNeeding = 0
         for i = 1, #spells do
             if cfg[i] then totalNeeding = totalNeeding + CountNeeding(token, i) end
         end
+        local mark = expandedClasses[token] and "\226\150\188 " or "\226\150\182 "
         if not anyEnabled then
-            row.lbl:SetText(string.format("%s |cff888888(off)|r", className))
+            row.lbl:SetText(mark .. className .. " |cff888888(off)|r")
         elseif totalNeeding > 0 then
-            row.lbl:SetText(string.format("%s |cffffff00(%d)|r", className, totalNeeding))
+            row.lbl:SetText(mark .. string.format("%s |cffffff00(%d)|r", className, totalNeeding))
         else
-            row.lbl:SetText(string.format("%s |cff00ff00\226\156\147|r", className))
+            row.lbl:SetText(mark .. className .. " |cff00ff00\226\156\147|r")
         end
 
-        -- Per-spell buff buttons
+        -- Collapsed view: show only the active spell button (scroll to cycle)
+        local activeIdx = GetActiveSpellIdx(token)
         for i = 1, MAX_SPELLS do
             local btn = row.btns[i]
-            if not spells[i] or not cfg[i] then
-                -- Spell not learned or disabled for this class
+            if i ~= activeIdx or not spells[i] or not cfg[i] then
                 btn:Hide()
                 btn._nextUID = nil
             else
                 btn:ClearAllPoints()
                 btn:SetPoint("TOPLEFT", secureHost, "TOPLEFT",
-                    4 + NAME_W + PAD + (i - 1) * COL_W,
-                    -(HEADER_H + (idx - 1) * ROW_H + PAD + 2))
+                    4 + NAME_W + PAD, -(currentY + 2))
                 btn:Show()
                 btn.iconTex:SetTexture(spellIcons[i] or "Interface\\Icons\\INV_Misc_QuestionMark")
-
-                -- Point button to first in-range member needing this buff
                 local nextUID = GetNextInQueue(token, i)
                 btn._nextUID  = nextUID
-
                 if not inCombat then
                     local castTarget = nextUID or "player"
                     btn:SetAttribute("macrotext",
                         string.format("/cast [target=%s] %s", castTarget, spells[i]))
                 end
-
                 if nextUID then
-                    -- Someone needs this buff and is in range â€” ready to cast
-                    btn.iconTex:SetVertexColor(1.0, 1.0, 1.0)
+                    btn.iconTex:SetVertexColor(1, 1, 1)
                     btn:SetAlpha(1.0)
-                    -- Show expiry timer if next target's buff is running out
                     local e = buffStatus[nextUID]
                     if e and e[i] and e[i].expiry then
                         local remaining = e[i].expiry - now
@@ -685,31 +770,100 @@ UpdateUI = function()
                         btn.timerTxt:Hide()
                     end
                 else
-                    -- Everyone in this class has this buff (or all out of range)
                     btn.iconTex:SetVertexColor(0.4, 1.0, 0.4)
                     btn:SetAlpha(0.55)
                     btn.timerTxt:Hide()
                 end
             end
         end
-    end
 
-    -- Hide rows not in the visible list
-    for token, row in pairs(rowPool) do
-        local shown = false
-        for _, entry in ipairs(visible) do
-            if entry.token == token then shown = true; break end
-        end
-        if not shown then
-            row:Hide()
-            for j = 1, MAX_SPELLS do
-                if row.btns[j] then row.btns[j]:Hide() end
+        currentY = currentY + ROW_H
+
+        -- Expanded view: one sub-row per player with all enabled spell buttons
+        if expandedClasses[token] then
+            local pmembers = classMembers[token] or {}
+            for _, uid in ipairs(pmembers) do
+                shownUIDs[uid] = true
+                local prow = GetOrCreatePlayerRow(uid)
+                prow:SetWidth(frameW - 8)
+                prow:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", 4, -currentY)
+                prow:Show()
+
+                local pname  = UnitName(uid) or uid
+                local online = UnitIsConnected and UnitIsConnected(uid)
+                prow.lbl:SetText(online ~= false
+                    and ("  " .. pname)
+                    or  ("  |cff888888" .. pname .. "|r"))
+                prow.lbl:SetTextColor(1, 1, 1)
+
+                for i = 1, MAX_SPELLS do
+                    local pbtn = prow.btns[i]
+                    if not spells[i] or not cfg[i] then
+                        pbtn:Hide()
+                    else
+                        pbtn:ClearAllPoints()
+                        pbtn:SetPoint("TOPLEFT", secureHost, "TOPLEFT",
+                            4 + NAME_W + PAD + (i - 1) * COL_W,
+                            -(currentY + 2))
+                        pbtn:Show()
+                        pbtn.iconTex:SetTexture(
+                            spellIcons[i] or "Interface\\Icons\\INV_Misc_QuestionMark")
+                        if not inCombat then
+                            pbtn:SetAttribute("macrotext",
+                                string.format("/cast [target=%s] %s", uid, spells[i]))
+                        end
+                        local needsBuff = NeedsBuff(uid, i)
+                        local inRng     = GetRangeStatus(uid, i)
+                        if needsBuff and inRng then
+                            pbtn.iconTex:SetVertexColor(1, 1, 1)
+                            pbtn:SetAlpha(1.0)
+                            local e = buffStatus[uid]
+                            if e and e[i] and e[i].expiry then
+                                local remaining = e[i].expiry - now
+                                if remaining > 0 and remaining < NEEDS_REBUFF_THRESHOLD then
+                                    pbtn.timerTxt:SetText(math.ceil(remaining / 60) .. "m")
+                                    pbtn.timerTxt:Show()
+                                else
+                                    pbtn.timerTxt:Hide()
+                                end
+                            else
+                                pbtn.timerTxt:Hide()
+                            end
+                        elseif needsBuff then
+                            pbtn.iconTex:SetVertexColor(1, 0.5, 0.5)
+                            pbtn:SetAlpha(0.7)
+                            pbtn.timerTxt:Hide()
+                        else
+                            pbtn.iconTex:SetVertexColor(0.4, 1.0, 0.4)
+                            pbtn:SetAlpha(0.55)
+                            pbtn.timerTxt:Hide()
+                        end
+                    end
+                end
+
+                currentY = currentY + ROW_H
             end
         end
     end
-end
 
--- â”€â”€ Main frame â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    mainFrame:SetHeight(math.max(currentY + PAD, HEADER_H + PAD * 2))
+
+    -- Cleanup: hide class rows not visible this pass
+    for token, row in pairs(rowPool) do
+        if not shownTokens[token] then
+            row:Hide()
+            for j = 1, MAX_SPELLS do if row.btns[j] then row.btns[j]:Hide() end end
+        end
+    end
+
+    -- Cleanup: hide player rows not visible this pass
+    for uid, prow in pairs(playerRowPool) do
+        if not shownUIDs[uid] then
+            prow:Hide()
+            for j = 1, MAX_SPELLS do if prow.btns[j] then prow.btns[j]:Hide() end end
+        end
+    end
+end
 local function CreateUI()
     local f = CreateFrame("Frame", "CoaPowerFrame", UIParent)
     mainFrame = f
@@ -747,6 +901,11 @@ local function CreateUI()
         for _, r in pairs(rowPool) do
             for j = 1, MAX_SPELLS do
                 if r.btns[j] then r.btns[j]:Hide() end
+            end
+        end
+        for _, pr in pairs(playerRowPool) do
+            for j = 1, MAX_SPELLS do
+                if pr.btns[j] then pr.btns[j]:Hide() end
             end
         end
     end)
