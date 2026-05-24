@@ -62,6 +62,7 @@ end
 local mainFrame   = nil
 local secureHost  = nil  -- UIParent child, SetAllPoints(mainFrame) â€” isolates secure buttons from mainFrame
 local configFrame = nil
+local ioPanel     = nil
 local headerIcons = {}
 local rowPool        = {}   -- [classToken] = row frame
 local playerRowPool  = {}   -- [uid]        = player sub-row frame
@@ -493,6 +494,223 @@ CreateConfigWindow = function()
     end
 
     configFrame = f
+end
+
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- Interface Options panel  (Escape â†’ Interface â†’ AddOns â†’ CoaPower)
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+local function RefreshIOPanel()
+    if not ioPanel then return end
+    if not isActive then
+        ioPanel.notActive:Show()
+        ioPanel.gridArea:Hide()
+        for _, w in ipairs(ioPanel.optWidgets) do w:Hide() end
+        return
+    end
+    ioPanel.notActive:Hide()
+    ioPanel.gridArea:Show()
+    for _, w in ipairs(ioPanel.optWidgets) do w:Show() end
+
+    local cols = {}
+    if #classRows > 0 then
+        for _, t in ipairs(classRows) do cols[#cols + 1] = t end
+    else
+        local seen = {}
+        for k in pairs(CLASS_DEFAULTS) do seen[k] = true end
+        if COAPOWER_CLASS_DATA then
+            for k, v in pairs(COAPOWER_CLASS_DATA) do
+                if v and #v > 0 then seen[k] = true end
+            end
+        end
+        for k in pairs(seen) do cols[#cols + 1] = k end
+        table.sort(cols)
+    end
+    local nCols = math.min(#cols, CFG_MAX_COLS)
+
+    for c = 1, CFG_MAX_COLS do
+        local lbl = ioPanel.colHeaders[c]
+        if c <= nCols then
+            local t = cols[c]
+            local m = classMembers[t]
+            local name = (m and m[1] and UnitClass(m[1])) or (t:sub(1,1) .. t:sub(2):lower())
+            lbl:SetText(name)
+            local cc = RAID_CLASS_COLORS and RAID_CLASS_COLORS[t]
+            if cc then lbl:SetTextColor(cc.r, cc.g, cc.b) else lbl:SetTextColor(1,1,1) end
+            lbl:Show()
+        else
+            lbl:Hide()
+        end
+    end
+
+    for r = 1, MAX_SPELLS do
+        local ic = ioPanel.rowIcons[r]
+        ic:SetTexture(spellIcons[r] or "Interface\\Icons\\INV_Misc_QuestionMark")
+        if spells[r] then ic:SetVertexColor(1,1,1) else ic:SetVertexColor(0.4,0.4,0.4) end
+        ioPanel.rowLabels[r]:SetText(spells[r] or "|cff666666(slot " .. r .. ")|r")
+        for c = 1, CFG_MAX_COLS do
+            local cb = ioPanel.cells[r][c]
+            if c <= nCols then
+                local t = cols[c]
+                cb._classToken = t
+                cb:SetChecked(GetClassCfg(t)[r])
+                cb:Show()
+            else
+                cb._classToken = nil
+                cb:Hide()
+            end
+        end
+    end
+
+    ioPanel.lockCb:SetChecked(db.locked)
+    ioPanel.rangeCb:SetChecked(db.rangeOnly)
+    ioPanel.verboseCb:SetChecked(db.verbose ~= false)
+end
+
+local function CreateIOPanel()
+    local p = CreateFrame("Frame", "CoaPowerInterfacePanel")
+    p.name    = "CoaPower"
+    p.refresh = RefreshIOPanel
+
+    local title = p:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", p, "TOPLEFT", 16, -16)
+    title:SetText("|cffFFD700CoaPower|r")
+    local sub = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+    sub:SetText("Multi-class buff tracker")
+    sub:SetTextColor(0.7, 0.7, 0.7)
+
+    local notActive = p:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    notActive:SetPoint("TOPLEFT", sub, "BOTTOMLEFT", 0, -20)
+    notActive:SetTextColor(1, 0.5, 0.5)
+    notActive:SetText("CoaPower is not active for your class.\n"
+        .. "Add your class to |cffFFD700CoaPower_Data.lua|r to enable it.")
+    notActive:Hide()
+    p.notActive = notActive
+
+    -- Grid area (spell x class checkboxes)
+    local ga = CreateFrame("Frame", nil, p)
+    ga:SetPoint("TOPLEFT", sub, "BOTTOMLEFT", 0, -16)
+    ga:SetSize(CFG_CORNER_W + CFG_MAX_COLS * CFG_COL_W + 20,
+               CFG_HDR_H + MAX_SPELLS * CFG_ROW_H + 4)
+    ga:Hide()
+    p.gridArea = ga
+
+    local hSep = ga:CreateTexture(nil, "ARTWORK")
+    hSep:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
+    hSep:SetVertexColor(0.4, 0.4, 0.4, 1)
+    hSep:SetHeight(1)
+    hSep:SetWidth(CFG_CORNER_W + CFG_MAX_COLS * CFG_COL_W)
+    hSep:SetPoint("TOPLEFT", ga, "TOPLEFT", 0, -CFG_HDR_H)
+    local vSep = ga:CreateTexture(nil, "ARTWORK")
+    vSep:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
+    vSep:SetVertexColor(0.4, 0.4, 0.4, 1)
+    vSep:SetWidth(1)
+    vSep:SetHeight(CFG_HDR_H + MAX_SPELLS * CFG_ROW_H)
+    vSep:SetPoint("TOPLEFT", ga, "TOPLEFT", CFG_CORNER_W, 0)
+
+    local cs = ga:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    cs:SetPoint("TOPLEFT", ga, "TOPLEFT", 4, -8)
+    cs:SetTextColor(0.65, 0.65, 0.65)
+    cs:SetText("Spell")
+    local cc2 = ga:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    cc2:SetPoint("BOTTOMRIGHT", ga, "TOPLEFT", CFG_CORNER_W - 4, -(CFG_HDR_H - 5))
+    cc2:SetTextColor(0.65, 0.65, 0.65)
+    cc2:SetText("Class")
+
+    p.colHeaders = {}
+    for c = 1, CFG_MAX_COLS do
+        local lbl = ga:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        lbl:SetSize(CFG_COL_W - 4, CFG_HDR_H - 4)
+        lbl:SetJustifyH("CENTER")
+        lbl:SetJustifyV("MIDDLE")
+        lbl:SetWordWrap(true)
+        lbl:SetPoint("TOPLEFT", ga, "TOPLEFT", CFG_CORNER_W + (c - 1) * CFG_COL_W, -2)
+        lbl:Hide()
+        p.colHeaders[c] = lbl
+    end
+
+    p.rowIcons  = {}
+    p.rowLabels = {}
+    p.cells     = {}
+    for r = 1, MAX_SPELLS do
+        local rowY = -(CFG_HDR_H + (r - 1) * CFG_ROW_H)
+        local ic = ga:CreateTexture(nil, "ARTWORK")
+        ic:SetSize(18, 18)
+        ic:SetPoint("TOPLEFT", ga, "TOPLEFT", 12, rowY - 4)
+        p.rowIcons[r] = ic
+        local lb = ga:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        lb:SetSize(CFG_CORNER_W - 36, CFG_ROW_H)
+        lb:SetJustifyH("LEFT")
+        lb:SetJustifyV("MIDDLE")
+        lb:SetPoint("TOPLEFT", ga, "TOPLEFT", 34, rowY - 2)
+        p.rowLabels[r] = lb
+        p.cells[r] = {}
+        for c = 1, CFG_MAX_COLS do
+            local cb = CreateFrame("CheckButton", nil, ga, "UICheckButtonTemplate")
+            cb:SetSize(22, 22)
+            cb:SetPoint("TOPLEFT", ga, "TOPLEFT",
+                CFG_CORNER_W + (c - 1) * CFG_COL_W + math.floor((CFG_COL_W - 22) / 2),
+                rowY - math.floor((CFG_ROW_H - 22) / 2))
+            cb._r = r
+            cb._classToken = nil
+            cb:SetScript("OnClick", function(self)
+                local token = self._classToken
+                if not token then return end
+                if not db.classConfig then db.classConfig = {} end
+                if type(db.classConfig[token]) ~= "table" then
+                    local cur = {}
+                    for ii = 1, MAX_SPELLS do cur[ii] = true end
+                    db.classConfig[token] = cur
+                end
+                db.classConfig[token][self._r] = self:GetChecked() and true or false
+                if isActive then UpdateUI() end
+            end)
+            cb:Hide()
+            p.cells[r][c] = cb
+        end
+    end
+
+    -- Options section
+    p.optWidgets = {}
+    local optTitle = p:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    optTitle:SetPoint("TOPLEFT", ga, "BOTTOMLEFT", 0, -16)
+    optTitle:SetText("Options")
+    optTitle:SetTextColor(1, 0.9, 0.5)
+    p.optWidgets[#p.optWidgets + 1] = optTitle
+
+    local function addOpt(labelText, dy)
+        local cb = CreateFrame("CheckButton", nil, p, "UICheckButtonTemplate")
+        cb:SetSize(22, 22)
+        cb:SetPoint("TOPLEFT", optTitle, "BOTTOMLEFT", 0, dy)
+        local lbl = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        lbl:SetPoint("LEFT", cb, "RIGHT", 4, 0)
+        lbl:SetText(labelText)
+        p.optWidgets[#p.optWidgets + 1] = cb
+        p.optWidgets[#p.optWidgets + 1] = lbl
+        return cb
+    end
+
+    local lockCb    = addOpt("Lock frame position", -4)
+    local rangeCb   = addOpt("Range-only (hide out-of-range classes)", -30)
+    local verboseCb = addOpt("Verbose output", -56)
+
+    lockCb:SetScript("OnClick", function(self)
+        db.locked = self:GetChecked() and true or false
+    end)
+    rangeCb:SetScript("OnClick", function(self)
+        db.rangeOnly = self:GetChecked() and true or false
+        if isActive then UpdateUI() end
+    end)
+    verboseCb:SetScript("OnClick", function(self)
+        db.verbose = self:GetChecked() and true or false
+    end)
+
+    p.lockCb    = lockCb
+    p.rangeCb   = rangeCb
+    p.verboseCb = verboseCb
+
+    InterfaceOptions_AddCategory(p)
+    ioPanel = p
 end
 
 -- â”€â”€ Row factory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -931,16 +1149,15 @@ local function CreateUI()
     cfgBtn:SetNormalTexture("Interface\\Buttons\\UI-OptionsButton")
     cfgBtn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
     cfgBtn:SetScript("OnClick", function()
-        if configFrame and configFrame:IsShown() then
-            configFrame:Hide()
-        else
-            RefreshConfigWindow()
+        if ioPanel then
+            InterfaceOptionsFrame_OpenToCategory(ioPanel)
+            InterfaceOptionsFrame_OpenToCategory(ioPanel)
         end
     end)
     cfgBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:AddLine("Buff Config", 1, 1, 0)
-        GameTooltip:AddLine("/sb config", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("Opens Interface → AddOns → CoaPower", 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     cfgBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -990,6 +1207,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 end
             end
             db = CoaPowerDB
+            CreateIOPanel()
             -- Migrate old integer classConfig format (0..3) to boolean array
             if db.classConfig then
                 local OLD_MAP = {
