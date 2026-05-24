@@ -1012,7 +1012,11 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         casterClass = token
         -- Activate only if this class has known or user-configured spells
         local userList = db.spellsByClass and db.spellsByClass[token]
-        if (not userList or #userList == 0) and not CLASS_DEFAULTS[token] then return end
+        local dataList = COAPOWER_CLASS_DATA and COAPOWER_CLASS_DATA[token]
+        local hasSpells = (userList and #userList > 0)
+            or CLASS_DEFAULTS[token]
+            or (dataList and #dataList > 0)
+        if not hasSpells then return end
         isActive = true
         ScanSpellbook()
         RebuildRoster()

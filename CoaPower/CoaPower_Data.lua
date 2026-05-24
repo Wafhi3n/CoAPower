@@ -13,7 +13,9 @@ COAPOWER_CLASS_DATA = {
         "Devotion of Grace",
         "Devotion of Radiance",
     },
-
+    RANGER = {
+        "Woodsman's Adaptation",
+    },
     -- ── Standard classes ─────────────────────────────────────────────────────
     DRUID = {
         "Mark of the Wild",
