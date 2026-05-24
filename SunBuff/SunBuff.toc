@@ -5,4 +5,5 @@
 ## Version: 2.0
 ## SavedVariables: SunBuffDB
 
+SunBuff_Data.lua
 SunBuff.lua
