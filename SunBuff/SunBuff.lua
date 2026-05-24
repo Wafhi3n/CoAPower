@@ -37,7 +37,7 @@ local DB_DEFAULTS = {
     yOfs         = 0,
     locked       = false,
     rangeOnly    = false,             -- true = hide out-of-range rows entirely
-    verbose      = true,              -- false = suppress confirmation messages
+    verbose      = false,             -- false = suppress confirmation messages
     classConfig  = {},                -- [classToken] = { [1]=bool, [2]=bool, [3]=bool }
     spellsByClass= {},                -- [classToken] = {spellName,...} (user overrides)
 }
