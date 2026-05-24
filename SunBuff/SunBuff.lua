@@ -27,12 +27,17 @@ local buffStatus   = {}               -- [uid] = { name, unitID, [i]={present,ex
 local scanTimer    = 0
 local db           = {}
 
+local function SunPrint(...)
+    if db.verbose ~= false then print(...) end
+end
+
 local DB_DEFAULTS = {
     point        = "CENTER",
     xOfs         = 0,
     yOfs         = 0,
     locked       = false,
     rangeOnly    = false,             -- true = hide out-of-range rows entirely
+    verbose      = true,              -- false = suppress confirmation messages
     classConfig  = {},                -- [classToken] = { [1]=bool, [2]=bool, [3]=bool }
     spellsByClass= {},                -- [classToken] = {spellName,...} (user overrides)
 }
@@ -242,7 +247,7 @@ local function CycleClassConfig(classToken, delta)
     local members   = classMembers[classToken]
     local className = classToken
     if members and members[1] then className = UnitClass(members[1]) or classToken end
-    print(string.format("|cffFFD700SunBuff|r: %s \226\134\146 %s",
+    SunPrint(string.format("|cffFFD700SunBuff|r: %s \226\134\146 %s",
         className, newState and "|cff00ff00all on|r" or "|cffff6666all off|r"))
 end
 
@@ -895,12 +900,12 @@ SlashCmdList["SUNBUFF"] = function(msg)
 
     elseif cmd == "lock" then
         db.locked = not db.locked
-        print("|cffFFD700SunBuff|r: frame " ..
+        SunPrint("|cffFFD700SunBuff|r: frame " ..
               (db.locked and "|cffff9900locked|r" or "|cff00ff00unlocked|r"))
 
     elseif cmd == "range" then
         db.rangeOnly = not db.rangeOnly
-        print("|cffFFD700SunBuff|r: out-of-range rows " ..
+        SunPrint("|cffFFD700SunBuff|r: out-of-range rows " ..
               (db.rangeOnly and "|cff00ff00hidden|r" or "|cffffff00greyed out|r"))
         if isActive then UpdateUI() end
 
@@ -932,7 +937,7 @@ SlashCmdList["SUNBUFF"] = function(msg)
             ScanSpellbook()
             ScanAll()
         end
-        print("|cffFFD700SunBuff|r: tracking '" .. arg .. "'")
+        SunPrint("|cffFFD700SunBuff|r: tracking '" .. arg .. "'")
         UpdateUI()
 
     elseif cmd == "removespell" then
@@ -946,7 +951,7 @@ SlashCmdList["SUNBUFF"] = function(msg)
             local removed = list[idx]
             table.remove(list, idx)
             ScanSpellbook()
-            print("|cffFFD700SunBuff|r: removed '" .. removed .. "'")
+            SunPrint("|cffFFD700SunBuff|r: removed '" .. removed .. "'")
             if isActive then ScanAll(); UpdateUI() end
         else
             print("|cffFFD700SunBuff|r: no custom spell at index " .. idx)
@@ -966,9 +971,14 @@ SlashCmdList["SUNBUFF"] = function(msg)
     elseif cmd == "reset" then
         if db.classConfig then
             db.classConfig = {}
-            print("|cffFFD700SunBuff|r: all class buff assignments reset to default.")
+            SunPrint("|cffFFD700SunBuff|r: all class buff assignments reset to default.")
             if isActive then UpdateUI() end
         end
+
+    elseif cmd == "verbose" then
+        db.verbose = not db.verbose
+        print("|cffFFD700SunBuff|r: verbose " ..
+              (db.verbose and "|cff00ff00on|r" or "|cffff6666off|r"))
 
     elseif cmd == "config" or cmd == "cfg" then
         if not isActive then print("|cffFFD700SunBuff|r: not active."); return end
@@ -988,6 +998,7 @@ SlashCmdList["SUNBUFF"] = function(msg)
         print("  /sb spells             — list currently tracked spells")
         print("  /sb reset              — reset all class buff assignments to default")
         print("  /sb config             \226\128\148 open / close buff config matrix")
+        print("  /sb verbose            \226\128\148 toggle confirmation messages on/off")
         print("  Mousewheel on class row \226\128\148 toggle all spells on/off for that class")
     end
 end
