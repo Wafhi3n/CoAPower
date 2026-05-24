@@ -7,7 +7,7 @@
 --           → set to 0 if unknown, falls back to name-based lookup
 --   name : spell name matched against UnitBuff() — must be exact
 
-SUNBUFF_CLASS_DATA = {
+COAPOWER_CLASS_DATA = {
 
     -- ── Ascension custom classes ─────────────────────────────────────────────
     SUNCLERIC = {

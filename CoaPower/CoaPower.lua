@@ -1,9 +1,9 @@
--- SunBuff.lua
--- Multi-class buff tracker — class rows, range check, chain cast, expiry timers
+-- CoaPower.lua
+-- Multi-class buff tracker â€” class rows, range check, chain cast, expiry timers
 -- Ascension 3.3.5
 
--- ── Constants ────────────────────────────────────────────────────────────────
-local NEEDS_REBUFF_THRESHOLD = 300   -- 5 min in seconds → show in queue + timer
+-- â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+local NEEDS_REBUFF_THRESHOLD = 300   -- 5 min in seconds â†’ show in queue + timer
 local SCAN_INTERVAL          = 1.5   -- seconds between full roster scans
 
 -- Default tracked spells per caster class (auto-detected on PLAYER_LOGIN).
@@ -15,7 +15,7 @@ local CLASS_DEFAULTS = {
     MAGE      = { "Arcane Intellect",      "Arcane Brilliance"     },
 }
 
--- ── State ────────────────────────────────────────────────────────────────────
+-- â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 local isActive     = false
 local casterClass  = nil              -- classToken of logged-in player
 local spells       = {}               -- [i] = spellName  (up to MAX_SPELLS)
@@ -27,7 +27,7 @@ local buffStatus   = {}               -- [uid] = { name, unitID, [i]={present,ex
 local scanTimer    = 0
 local db           = {}
 
-local function SunPrint(...)
+local function CoaPrint(...)
     if db.verbose ~= false then print(...) end
 end
 
@@ -42,7 +42,7 @@ local DB_DEFAULTS = {
     spellsByClass= {},                -- [classToken] = {spellName,...} (user overrides)
 }
 
--- ── UI sizing ─────────────────────────────────────────────────────────────────
+-- â”€â”€ UI sizing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 local MAX_SPELLS = 3
 local ICON_SIZE  = 18
 local ROW_H      = 22
@@ -59,15 +59,15 @@ end
 
 -- UI handles
 local mainFrame   = nil
-local secureHost  = nil  -- UIParent child, SetAllPoints(mainFrame) — isolates secure buttons from mainFrame
+local secureHost  = nil  -- UIParent child, SetAllPoints(mainFrame) â€” isolates secure buttons from mainFrame
 local configFrame = nil
 local headerIcons = {}
 local rowPool     = {}   -- [classToken] = row frame
 
 local UpdateUI   -- forward declaration
 
--- ── Buff info ─────────────────────────────────────────────────────────────────
--- Returns: present (bool), expiry (number|nil) — nil means permanent or absent
+-- â”€â”€ Buff info â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- Returns: present (bool), expiry (number|nil) â€” nil means permanent or absent
 local function GetBuffInfo(unitID, spellName)
     local i = 1
     while true do
@@ -81,17 +81,17 @@ local function GetBuffInfo(unitID, spellName)
     end
 end
 
--- ── Range check ───────────────────────────────────────────────────────────────
+-- â”€â”€ Range check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Returns true = in range (or AoE/no-range spell), false = out of range / invisible
 local function GetRangeStatus(unitID, spellIdx)
     if not UnitIsVisible(unitID) then return false end
     local spell = spells[spellIdx]
     if not spell then return false end
     local r = IsSpellInRange(spell, unitID)
-    return r == nil or r == 1   -- nil → no range limit (AoE) → always in range
+    return r == nil or r == 1   -- nil â†’ no range limit (AoE) â†’ always in range
 end
 
--- ── Spellbook scan ────────────────────────────────────────────────────────────
+-- â”€â”€ Spellbook scan â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 local function ScanSpellbook()
     wipe(spells)
     wipe(spellIcons)
@@ -108,7 +108,7 @@ local function ScanSpellbook()
             targetIds[i]   = 0
         end
     else
-        local classData = SUNBUFF_CLASS_DATA and SUNBUFF_CLASS_DATA[casterClass]
+        local classData = COAPOWER_CLASS_DATA and COAPOWER_CLASS_DATA[casterClass]
         if classData then
             for i, entry in ipairs(classData) do
                 targetNames[i] = entry.name
@@ -147,7 +147,7 @@ local function ScanSpellbook()
     end
 end
 
--- ── Roster management ─────────────────────────────────────────────────────────
+-- â”€â”€ Roster management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 local function RebuildRoster()
     wipe(roster)
     local numRaid  = GetNumRaidMembers()
@@ -179,7 +179,7 @@ local function RebuildClassRows()
     end
 end
 
--- ── Buff scan ────────────────────────────────────────────────────────────────
+-- â”€â”€ Buff scan â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 local function CheckUnit(unitID)
     if not UnitExists(unitID) then buffStatus[unitID] = nil; return end
     local name = UnitName(unitID)
@@ -201,7 +201,7 @@ local function ScanAll()
     for _, uid in ipairs(roster) do CheckUnit(uid) end
 end
 
--- ── Needs-buff logic ──────────────────────────────────────────────────────────
+-- â”€â”€ Needs-buff logic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Returns true if uid is missing spellIdx OR has less than threshold remaining
 local function NeedsBuff(uid, spellIdx)
     local e = buffStatus[uid]
@@ -247,7 +247,7 @@ local function AnyInRange(classToken, spellIdx)
     return false
 end
 
--- ── Class config helpers ───────────────────────────────────────────────────────
+-- â”€â”€ Class config helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- db.classConfig[classToken] = { [1]=bool, [2]=bool, [3]=bool }  (true = track this spell for this class)
 local function GetClassCfg(classToken)
     local cfg = db.classConfig and db.classConfig[classToken]
@@ -277,11 +277,11 @@ local function CycleClassConfig(classToken, delta)
     local members   = classMembers[classToken]
     local className = classToken
     if members and members[1] then className = UnitClass(members[1]) or classToken end
-    SunPrint(string.format("|cffFFD700SunBuff|r: %s \226\134\146 %s",
+    CoaPrint(string.format("|cffFFD700CoaPower|r: %s \226\134\146 %s",
         className, newState and "|cff00ff00all on|r" or "|cffff6666all off|r"))
 end
 
--- ── Config window ─────────────────────────────────────────────────────────────
+-- â”€â”€ Config window â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 local CFG_CORNER_W = 148
 local CFG_COL_W    = 72
 local CFG_ROW_H    = 26
@@ -373,7 +373,7 @@ local function RefreshConfigWindow()
 end
 
 CreateConfigWindow = function()
-    local f = CreateFrame("Frame", "SunBuffConfigFrame", UIParent)
+    local f = CreateFrame("Frame", "CoaPowerConfigFrame", UIParent)
     f:SetFrameStrata("DIALOG")
     f:SetBackdrop({
         bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -394,7 +394,7 @@ CreateConfigWindow = function()
     -- Title
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -8)
-    title:SetText("|cffFFD700SunBuff|r Config")
+    title:SetText("|cffFFD700CoaPower|r Config")
 
     -- Close button
     local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
@@ -482,7 +482,7 @@ CreateConfigWindow = function()
     configFrame = f
 end
 
--- ── Row factory ───────────────────────────────────────────────────────────────
+-- â”€â”€ Row factory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 local function GetOrCreateClassRow(classToken)
     if rowPool[classToken] then return rowPool[classToken] end
 
@@ -551,10 +551,10 @@ local function GetOrCreateClassRow(classToken)
         row.btns[i] = btn
     end
 
-    -- Mousewheel → cycle this class's buff assignment
+    -- Mousewheel â†’ cycle this class's buff assignment
     row:SetScript("OnMouseWheel", function(self, delta)
         if InCombatLockdown() then
-            print("|cffFFD700SunBuff|r: cannot change config during combat.")
+            print("|cffFFD700CoaPower|r: cannot change config during combat.")
             return
         end
         CycleClassConfig(self._classToken, delta)
@@ -565,7 +565,7 @@ local function GetOrCreateClassRow(classToken)
     return row
 end
 
--- ── UI update ─────────────────────────────────────────────────────────────────
+-- â”€â”€ UI update â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 UpdateUI = function()
     if not mainFrame or not mainFrame:IsShown() or not isActive then return end
 
@@ -685,7 +685,7 @@ UpdateUI = function()
                 end
 
                 if nextUID then
-                    -- Someone needs this buff and is in range — ready to cast
+                    -- Someone needs this buff and is in range â€” ready to cast
                     btn.iconTex:SetVertexColor(1.0, 1.0, 1.0)
                     btn:SetAlpha(1.0)
                     -- Show expiry timer if next target's buff is running out
@@ -726,9 +726,9 @@ UpdateUI = function()
     end
 end
 
--- ── Main frame ────────────────────────────────────────────────────────────────
+-- â”€â”€ Main frame â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 local function CreateUI()
-    local f = CreateFrame("Frame", "SunBuffFrame", UIParent)
+    local f = CreateFrame("Frame", "CoaPowerFrame", UIParent)
     mainFrame = f
 
     -- Secure host: child of UIParent (NOT mainFrame), follows mainFrame's layout.
@@ -774,7 +774,7 @@ local function CreateUI()
     -- Title
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     title:SetPoint("TOPLEFT", f, "TOPLEFT", PAD + 2, -5)
-    title:SetText("|cffFFD700SunBuff|r")
+    title:SetText("|cffFFD700CoaPower|r")
 
     -- Close button
     local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
@@ -826,8 +826,8 @@ local function CreateUI()
     f:Hide()
 end
 
--- ── Event handling ────────────────────────────────────────────────────────────
-local eventFrame = CreateFrame("Frame", "SunBuffEventFrame")
+-- â”€â”€ Event handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+local eventFrame = CreateFrame("Frame", "CoaPowerEventFrame")
 eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
@@ -837,17 +837,17 @@ eventFrame:RegisterEvent("LEARNED_SPELL_IN_TAB")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 
 eventFrame:SetScript("OnEvent", function(self, event, ...)
-    -- ── ADDON_LOADED ──────────────────────────────────────────────────────────
+    -- â”€â”€ ADDON_LOADED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if event == "ADDON_LOADED" then
         local name = ...
-        if name == "SunBuff" then
-            SunBuffDB = SunBuffDB or {}
+        if name == "CoaPower" then
+            CoaPowerDB = CoaPowerDB or {}
             for k, v in pairs(DB_DEFAULTS) do
-                if SunBuffDB[k] == nil then
-                    SunBuffDB[k] = (type(v) == "table") and {} or v
+                if CoaPowerDB[k] == nil then
+                    CoaPowerDB[k] = (type(v) == "table") and {} or v
                 end
             end
-            db = SunBuffDB
+            db = CoaPowerDB
             -- Migrate old integer classConfig format (0..3) to boolean array
             if db.classConfig then
                 local OLD_MAP = {
@@ -864,7 +864,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             end
         end
 
-    -- ── PLAYER_LOGIN ──────────────────────────────────────────────────────────
+    -- â”€â”€ PLAYER_LOGIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     elseif event == "PLAYER_LOGIN" then
         local _, token = UnitClass("player")
         casterClass = token
@@ -880,14 +880,14 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         mainFrame:Show()
         UpdateUI()
 
-    -- ── ROSTER CHANGES ────────────────────────────────────────────────────────
+    -- â”€â”€ ROSTER CHANGES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     elseif event == "RAID_ROSTER_UPDATE" or event == "PARTY_MEMBERS_CHANGED" then
         if not isActive then return end
         RebuildRoster()
         ScanAll()
         UpdateUI()
 
-    -- ── UNIT_AURA: recheck unit + auto-advance chain cast ─────────────────────
+    -- â”€â”€ UNIT_AURA: recheck unit + auto-advance chain cast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     elseif event == "UNIT_AURA" then
         if not isActive then return end
         local unitID = ...
@@ -899,13 +899,13 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             end
         end
 
-    -- ── NEW SPELL LEARNED ────────────────────────────────────────────────────
+    -- â”€â”€ NEW SPELL LEARNED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     elseif event == "LEARNED_SPELL_IN_TAB" then
         if not isActive then return end
         ScanSpellbook()
         UpdateUI()
 
-    -- ── COMBAT ENDED: refresh secure attributes ───────────────────────────────
+    -- â”€â”€ COMBAT ENDED: refresh secure attributes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     elseif event == "PLAYER_REGEN_ENABLED" then
         if not isActive then return end
         ScanAll()
@@ -913,10 +913,10 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
--- ── Slash commands ────────────────────────────────────────────────────────────
-SLASH_SUNBUFF1 = "/sunbuff"
-SLASH_SUNBUFF2 = "/sb"
-SlashCmdList["SUNBUFF"] = function(msg)
+-- â”€â”€ Slash commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+SLASH_COAPOWER1 = "/coapower"
+SLASH_COAPOWER2 = "/cp"
+SlashCmdList["COAPOWER"] = function(msg)
     local cmd, arg = msg:match("^%s*(%S*)%s*(.-)%s*$")
     cmd = cmd:lower()
 
@@ -924,24 +924,24 @@ SlashCmdList["SUNBUFF"] = function(msg)
         if mainFrame then
             if mainFrame:IsShown() then mainFrame:Hide() else mainFrame:Show() end
         else
-            print("|cffFFD700SunBuff|r: not active for class '" ..
+            print("|cffFFD700CoaPower|r: not active for class '" ..
                   (casterClass or "unknown") .. "'. Use /sb addspell <name>.")
         end
 
     elseif cmd == "lock" then
         db.locked = not db.locked
-        SunPrint("|cffFFD700SunBuff|r: frame " ..
+        CoaPrint("|cffFFD700CoaPower|r: frame " ..
               (db.locked and "|cffff9900locked|r" or "|cff00ff00unlocked|r"))
 
     elseif cmd == "range" then
         db.rangeOnly = not db.rangeOnly
-        SunPrint("|cffFFD700SunBuff|r: out-of-range rows " ..
+        CoaPrint("|cffFFD700CoaPower|r: out-of-range rows " ..
               (db.rangeOnly and "|cff00ff00hidden|r" or "|cffffff00greyed out|r"))
         if isActive then UpdateUI() end
 
     elseif cmd == "addspell" then
         if arg == "" then
-            print("|cffFFD700SunBuff|r: usage: /sb addspell <spell name>")
+            print("|cffFFD700CoaPower|r: usage: /sb addspell <spell name>")
             return
         end
         if not casterClass then return end
@@ -949,7 +949,7 @@ SlashCmdList["SUNBUFF"] = function(msg)
         db.spellsByClass[casterClass] = db.spellsByClass[casterClass] or {}
         for _, s in ipairs(db.spellsByClass[casterClass]) do
             if s == arg then
-                print("|cffFFD700SunBuff|r: '" .. arg .. "' already tracked.")
+                print("|cffFFD700CoaPower|r: '" .. arg .. "' already tracked.")
                 return
             end
         end
@@ -967,13 +967,13 @@ SlashCmdList["SUNBUFF"] = function(msg)
             ScanSpellbook()
             ScanAll()
         end
-        SunPrint("|cffFFD700SunBuff|r: tracking '" .. arg .. "'")
+        CoaPrint("|cffFFD700CoaPower|r: tracking '" .. arg .. "'")
         UpdateUI()
 
     elseif cmd == "removespell" then
         local idx = tonumber(arg)
         if not idx or not casterClass then
-            print("|cffFFD700SunBuff|r: usage: /sb removespell <1|2>")
+            print("|cffFFD700CoaPower|r: usage: /sb removespell <1|2>")
             return
         end
         local list = db.spellsByClass and db.spellsByClass[casterClass]
@@ -981,18 +981,18 @@ SlashCmdList["SUNBUFF"] = function(msg)
             local removed = list[idx]
             table.remove(list, idx)
             ScanSpellbook()
-            SunPrint("|cffFFD700SunBuff|r: removed '" .. removed .. "'")
+            CoaPrint("|cffFFD700CoaPower|r: removed '" .. removed .. "'")
             if isActive then ScanAll(); UpdateUI() end
         else
-            print("|cffFFD700SunBuff|r: no custom spell at index " .. idx)
+            print("|cffFFD700CoaPower|r: no custom spell at index " .. idx)
         end
 
     elseif cmd == "spells" then
         if #spells == 0 then
-            print("|cffFFD700SunBuff|r: no spells tracked for " .. (casterClass or "?"))
+            print("|cffFFD700CoaPower|r: no spells tracked for " .. (casterClass or "?"))
             print("  Use /sb addspell <name> to configure.")
         else
-            print("|cffFFD700SunBuff|r: tracking for " .. (casterClass or "?") .. ":")
+            print("|cffFFD700CoaPower|r: tracking for " .. (casterClass or "?") .. ":")
             for i, s in ipairs(spells) do
                 print(string.format("  [%d] %s", i, s))
             end
@@ -1001,17 +1001,17 @@ SlashCmdList["SUNBUFF"] = function(msg)
     elseif cmd == "reset" then
         if db.classConfig then
             db.classConfig = {}
-            SunPrint("|cffFFD700SunBuff|r: all class buff assignments reset to default.")
+            CoaPrint("|cffFFD700CoaPower|r: all class buff assignments reset to default.")
             if isActive then UpdateUI() end
         end
 
     elseif cmd == "verbose" then
         db.verbose = not db.verbose
-        print("|cffFFD700SunBuff|r: verbose " ..
+        print("|cffFFD700CoaPower|r: verbose " ..
               (db.verbose and "|cff00ff00on|r" or "|cffff6666off|r"))
 
     elseif cmd == "config" or cmd == "cfg" then
-        if not isActive then print("|cffFFD700SunBuff|r: not active."); return end
+        if not isActive then print("|cffFFD700CoaPower|r: not active."); return end
         if configFrame and configFrame:IsShown() then
             configFrame:Hide()
         else
@@ -1019,16 +1019,16 @@ SlashCmdList["SUNBUFF"] = function(msg)
         end
 
     else
-        print("|cffFFD700SunBuff|r commands:")
-        print("  /sb                    — toggle window")
-        print("  /sb lock               — lock / unlock frame position")
-        print("  /sb range              — toggle hide vs grey out-of-range rows")
-        print("  /sb addspell <name>    — track a new buff spell")
-        print("  /sb removespell <N>    — remove custom spell by slot index")
-        print("  /sb spells             — list currently tracked spells")
-        print("  /sb reset              — reset all class buff assignments to default")
-        print("  /sb config             \226\128\148 open / close buff config matrix")
-        print("  /sb verbose            \226\128\148 toggle confirmation messages on/off")
+        print("|cffFFD700CoaPower|r commands:")
+        print("  /cp                    â€” toggle window")
+        print("  /cp lock               â€” lock / unlock frame position")
+        print("  /cp range              â€” toggle hide vs grey out-of-range rows")
+        print("  /cp addspell <name>    â€” track a new buff spell")
+        print("  /cp removespell <N>    â€” remove custom spell by slot index")
+        print("  /cp spells             â€” list currently tracked spells")
+        print("  /cp reset              â€” reset all class buff assignments to default")
+        print("  /cp config             \226\128\148 open / close buff config matrix")
+        print("  /cp verbose            \226\128\148 toggle confirmation messages on/off")
         print("  Mousewheel on class row \226\128\148 toggle all spells on/off for that class")
     end
 end

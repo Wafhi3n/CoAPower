@@ -1,9 +1,9 @@
 ## Interface: 30300
-## Title: SunBuff
+## Title: CoaPower
 ## Notes: Multi-class buff tracker — range check, class rows, chain cast, expiry timers
 ## Author: wafhi
 ## Version: 2.0
-## SavedVariables: SunBuffDB
+## SavedVariables: CoaPowerDB
 
-SunBuff_Data.lua
-SunBuff.lua
+CoaPower_Data.lua
+CoaPower.lua
