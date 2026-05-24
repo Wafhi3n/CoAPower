@@ -98,30 +98,21 @@ local function ScanSpellbook()
     if not casterClass then return end
 
     -- Build target list: user overrides > data file > CLASS_DEFAULTS fallback
-    local targetNames = {}  -- [i] = spellName
-    local targetIds   = {}  -- [i] = spellID (0 = unknown)
-
+    -- Entries can be plain strings or {name="..."} tables.
+    local targetNames = {}
     local userOverride = db.spellsByClass and db.spellsByClass[casterClass]
     if userOverride and #userOverride > 0 then
-        for i, name in ipairs(userOverride) do
-            targetNames[i] = name
-            targetIds[i]   = 0
-        end
+        for i, name in ipairs(userOverride) do targetNames[i] = name end
     else
         local classData = COAPOWER_CLASS_DATA and COAPOWER_CLASS_DATA[casterClass]
-        if classData then
-            for i, entry in ipairs(classData) do
-                targetNames[i] = entry.name
-                targetIds[i]   = entry.id or 0
-            end
-        else
-            for i, name in ipairs(CLASS_DEFAULTS[casterClass] or {}) do
-                targetNames[i] = name
-                targetIds[i]   = 0
-            end
+        local src = classData or CLASS_DEFAULTS[casterClass] or {}
+        for i, entry in ipairs(src) do
+            targetNames[i] = type(entry) == "string" and entry or entry.name
         end
     end
 
+    -- Scan every spellbook slot; overwrite on each match so the
+    -- last occurrence (= highest rank) wins.
     for tab = 1, GetNumSpellTabs() do
         local _, _, offset, count = GetSpellTabInfo(tab)
         for slot = offset + 1, offset + count do
@@ -129,16 +120,8 @@ local function ScanSpellbook()
                 local name = GetSpellBookItemName(slot, BOOKTYPE_SPELL)
                 for i, target in ipairs(targetNames) do
                     if name == target and i <= MAX_SPELLS then
-                        spells[i] = name
-                        local icon
-                        if targetIds[i] and targetIds[i] > 0 then
-                            local _, _, spellIcon = GetSpellInfo(targetIds[i])
-                            icon = spellIcon
-                        end
-                        if not icon then
-                            local _, _, spellIcon = GetSpellInfo(name)
-                            icon = spellIcon
-                        end
+                        spells[i]     = name
+                        local _, _, icon = GetSpellInfo(name)
                         spellIcons[i] = icon or "Interface\\Icons\\INV_Misc_QuestionMark"
                     end
                 end
