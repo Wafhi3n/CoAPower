@@ -93,5 +93,7 @@ COAPOWER_CLASS_DATA.SHAMAN = {
 COAPOWER_CLASS_DATA.RANGER = {
     "Tracker's Focus",
 }
--- SUNCLERIC : noms de sorts Ascension, probablement toujours en anglais
--- COAPOWER_CLASS_DATA.SUNCLERIC = { "Devotion of Dawn", ... }  -- laisser tel quel
+COAPOWER_CLASS_DATA.SUNCLERIC = {
+    "Bénédiction de puissance",
+    "Bénir",
+}
