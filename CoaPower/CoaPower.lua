@@ -317,7 +317,12 @@ local function RefreshConfigWindow()
         table.sort(cols)
     end
     local nCols   = math.min(#cols, CFG_MAX_COLS)
-    local nRows   = MAX_SPELLS
+    local _uo = db.spellsByClass and db.spellsByClass[casterClass]
+    local _src = (_uo and #_uo > 0 and _uo)
+        or (COAPOWER_CLASS_DATA and COAPOWER_CLASS_DATA[casterClass])
+        or CLASS_DEFAULTS[casterClass] or {}
+    local nRows = math.max(#_src, 1)
+    for i = 1, MAX_SPELLS do if spells[i] then nRows = math.max(nRows, i) end end
     local totalW  = CFG_CORNER_W + nCols * CFG_COL_W + 20
     local totalH  = CFG_TITLE_H + CFG_HDR_H + nRows * CFG_ROW_H + 20
     configFrame:SetSize(totalW, totalH)
@@ -379,6 +384,15 @@ local function RefreshConfigWindow()
             else
                 cb._classToken = nil
                 cb:Hide()
+            end
+        end
+    end
+    for r = nRows + 1, MAX_SPELLS do
+        if configFrame.rowIcons[r]  then configFrame.rowIcons[r]:Hide()  end
+        if configFrame.rowLabels[r] then configFrame.rowLabels[r]:Hide() end
+        if configFrame.cells[r] then
+            for c = 1, CFG_MAX_COLS do
+                if configFrame.cells[r][c] then configFrame.cells[r][c]:Hide() end
             end
         end
     end
@@ -543,11 +557,20 @@ local function RefreshIOPanel()
         end
     end
 
-    for r = 1, MAX_SPELLS do
+    local _io_uo = db.spellsByClass and db.spellsByClass[casterClass]
+    local _io_src = (_io_uo and #_io_uo > 0 and _io_uo)
+        or (COAPOWER_CLASS_DATA and COAPOWER_CLASS_DATA[casterClass])
+        or CLASS_DEFAULTS[casterClass] or {}
+    local ioRows = math.max(#_io_src, 1)
+    for i = 1, MAX_SPELLS do if spells[i] then ioRows = math.max(ioRows, i) end end
+
+    for r = 1, ioRows do
         local ic = ioPanel.rowIcons[r]
         ic:SetTexture(spellIcons[r] or "Interface\\Icons\\INV_Misc_QuestionMark")
         if spells[r] then ic:SetVertexColor(1,1,1) else ic:SetVertexColor(0.4,0.4,0.4) end
         ioPanel.rowLabels[r]:SetText(spells[r] or string.format("|cff666666" .. L["(slot %d)"] .. "|r", r))
+        ic:Show()
+        ioPanel.rowLabels[r]:Show()
         for c = 1, CFG_MAX_COLS do
             local cb = ioPanel.cells[r][c]
             if c <= nCols then
@@ -558,6 +581,15 @@ local function RefreshIOPanel()
             else
                 cb._classToken = nil
                 cb:Hide()
+            end
+        end
+    end
+    for r = ioRows + 1, MAX_SPELLS do
+        if ioPanel.rowIcons[r]  then ioPanel.rowIcons[r]:Hide()  end
+        if ioPanel.rowLabels[r] then ioPanel.rowLabels[r]:Hide() end
+        if ioPanel.cells[r] then
+            for c = 1, CFG_MAX_COLS do
+                if ioPanel.cells[r][c] then ioPanel.cells[r][c]:Hide() end
             end
         end
     end
