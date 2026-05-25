@@ -90,5 +90,8 @@ COAPOWER_CLASS_DATA.SHAMAN = {
     "Totem de force de la Terre",
     "Totem langue de feu",
 }
--- SUNCLERIC / RANGER : noms de sorts Ascension, probablement toujours en anglais
+COAPOWER_CLASS_DATA.RANGER = {
+    "Tracker's Focus",
+}
+-- SUNCLERIC : noms de sorts Ascension, probablement toujours en anglais
 -- COAPOWER_CLASS_DATA.SUNCLERIC = { "Devotion of Dawn", ... }  -- laisser tel quel
