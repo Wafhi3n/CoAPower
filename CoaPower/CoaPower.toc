@@ -5,7 +5,7 @@
 ## Version: 2.0
 ## SavedVariables: CoaPowerDB
 
+CoaPower_Data.lua
 Locales\enUS.lua
 Locales\frFR.lua
-CoaPower_Data.lua
 CoaPower.lua

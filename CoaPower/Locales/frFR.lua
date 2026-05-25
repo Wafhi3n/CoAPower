@@ -67,3 +67,28 @@ L["help 07"] = "  /cp reset              \226\128\148 r\195\169initialiser les a
 L["help 08"] = "  /cp config             \226\128\148 ouvrir / fermer la matrice de config"
 L["help 09"] = "  /cp verbose            \226\128\148 activer/d\195\169sactiver les messages"
 L["help 10"] = "  Molette sur la rang\195\169e de classe \226\128\148 changer le sort actif"
+
+-- ── Spell names (spellbook returns French names on frFR client) ──────────────
+-- Verify these names in-game with /script print(GetSpellInfo(N)) if unsure.
+COAPOWER_CLASS_DATA.DRUID = {
+    "Marque des fauves",
+    "Don de la nature sauvage",
+}
+COAPOWER_CLASS_DATA.PRIEST = {
+    "Mot de pouvoir\194\160: Vigueur",
+    "Pri\195\168re de vigueur",
+}
+COAPOWER_CLASS_DATA.MAGE = {
+    "Intellect des arcanes",
+    "Brillance des arcanes",
+}
+COAPOWER_CLASS_DATA.PALADIN = {
+    "B\195\169n\195\169diction de puissance",
+    "Grande b\195\169n\195\169diction de puissance",
+}
+COAPOWER_CLASS_DATA.SHAMAN = {
+    "Totem de force de la Terre",
+    "Totem langue de feu",
+}
+-- SUNCLERIC / RANGER : noms de sorts Ascension, probablement toujours en anglais
+-- COAPOWER_CLASS_DATA.SUNCLERIC = { "Devotion of Dawn", ... }  -- laisser tel quel
