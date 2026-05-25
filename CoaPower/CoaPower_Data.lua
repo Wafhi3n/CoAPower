@@ -15,36 +15,5 @@ COAPOWER_CLASS_DATA = {
     },
     RANGER = {
         "Woodsman's Adaptation",
-    },
-    -- ── Standard classes ─────────────────────────────────────────────────────
-    DRUID = {
-        "Mark of the Wild",
-        "Gift of the Wild",
-    },
-
-    PRIEST = {
-        "Power Word: Fortitude",
-        "Prayer of Fortitude",
-    },
-
-    MAGE = {
-        "Arcane Intellect",
-        "Arcane Brilliance",
-    },
-
-    PALADIN = {
-        "Blessing of Might",
-        "Greater Blessing of Might",
-    },
-
-    SHAMAN = {
-        "Strength of Earth Totem",
-        "Flametongue Totem",
-    },
-
-    WARRIOR     = {},
-    HUNTER      = {},
-    ROGUE       = {},
-    WARLOCK     = {},
-    DEATHKNIGHT = {},
+    }
 }
