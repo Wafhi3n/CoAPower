@@ -26,6 +26,7 @@ local classMembers = {}               -- [classToken] = { uid, uid, ... }
 local buffStatus   = {}               -- [uid] = { name, unitID, [i]={present,expiry} }
 local scanTimer    = 0
 local db           = {}
+local L            = nil              -- set in ADDON_LOADED from CoaPowerL
 
 local function CoaPrint(...)
     if db.verbose ~= false then print(...) end
@@ -265,7 +266,7 @@ local function CycleClassConfig(classToken, delta)
     local className = classToken
     if members and members[1] then className = UnitClass(members[1]) or classToken end
     CoaPrint(string.format("|cffFFD700CoaPower|r: %s \226\134\146 %s",
-        className, newState and "|cff00ff00all on|r" or "|cffff6666all off|r"))
+        className, newState and L["all on"] or L["all off"]))
 end
 
 -- â”€â”€ Config window â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -360,7 +361,7 @@ local function RefreshConfigWindow()
         ic:Show()
 
         local lb = configFrame.rowLabels[r]
-        lb:SetText(spells[r] or "|cff666666(slot " .. r .. ")|r")
+        lb:SetText(spells[r] or string.format("|cff666666" .. L["(slot %d)"] .. "|r", r))
         lb:SetPoint("TOPLEFT", configFrame, "TOPLEFT", 34, rowY - 2)
         lb:Show()
 
@@ -408,7 +409,7 @@ CreateConfigWindow = function()
     -- Title
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -8)
-    title:SetText("|cffFFD700CoaPower|r Config")
+    title:SetText("|cffFFD700CoaPower|r " .. L["CoaPower Config"])
 
     -- Close button
     local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
@@ -434,12 +435,12 @@ CreateConfigWindow = function()
     local cornerSpell = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     cornerSpell:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -(CFG_TITLE_H + 3))
     cornerSpell:SetTextColor(0.65, 0.65, 0.65)
-    cornerSpell:SetText("Spell")
+    cornerSpell:SetText(L["Spell"])
     local cornerClass = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     cornerClass:SetPoint("BOTTOMRIGHT", f, "TOPLEFT",
         CFG_CORNER_W - 6, -(CFG_TITLE_H + CFG_HDR_H - 5))
     cornerClass:SetTextColor(0.65, 0.65, 0.65)
-    cornerClass:SetText("Class")
+    cornerClass:SetText(L["Class"])
 
     -- Pre-create column header labels
     f.colHeaders = {}
@@ -546,7 +547,7 @@ local function RefreshIOPanel()
         local ic = ioPanel.rowIcons[r]
         ic:SetTexture(spellIcons[r] or "Interface\\Icons\\INV_Misc_QuestionMark")
         if spells[r] then ic:SetVertexColor(1,1,1) else ic:SetVertexColor(0.4,0.4,0.4) end
-        ioPanel.rowLabels[r]:SetText(spells[r] or "|cff666666(slot " .. r .. ")|r")
+        ioPanel.rowLabels[r]:SetText(spells[r] or string.format("|cff666666" .. L["(slot %d)"] .. "|r", r))
         for c = 1, CFG_MAX_COLS do
             local cb = ioPanel.cells[r][c]
             if c <= nCols then
@@ -576,14 +577,13 @@ local function CreateIOPanel()
     title:SetText("|cffFFD700CoaPower|r")
     local sub = p:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
-    sub:SetText("Multi-class buff tracker")
+    sub:SetText(L["Multi-class buff tracker"])
     sub:SetTextColor(0.7, 0.7, 0.7)
 
     local notActive = p:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     notActive:SetPoint("TOPLEFT", sub, "BOTTOMLEFT", 0, -20)
     notActive:SetTextColor(1, 0.5, 0.5)
-    notActive:SetText("CoaPower is not active for your class.\n"
-        .. "Add your class to |cffFFD700CoaPower_Data.lua|r to enable it.")
+    notActive:SetText(L["not active panel"])
     notActive:Hide()
     p.notActive = notActive
 
@@ -611,11 +611,11 @@ local function CreateIOPanel()
     local cs = ga:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     cs:SetPoint("TOPLEFT", ga, "TOPLEFT", 4, -8)
     cs:SetTextColor(0.65, 0.65, 0.65)
-    cs:SetText("Spell")
+    cs:SetText(L["Spell"])
     local cc2 = ga:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     cc2:SetPoint("BOTTOMRIGHT", ga, "TOPLEFT", CFG_CORNER_W - 4, -(CFG_HDR_H - 5))
     cc2:SetTextColor(0.65, 0.65, 0.65)
-    cc2:SetText("Class")
+    cc2:SetText(L["Class"])
 
     p.colHeaders = {}
     for c = 1, CFG_MAX_COLS do
@@ -674,7 +674,7 @@ local function CreateIOPanel()
     p.optWidgets = {}
     local optTitle = p:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     optTitle:SetPoint("TOPLEFT", ga, "BOTTOMLEFT", 0, -16)
-    optTitle:SetText("Options")
+    optTitle:SetText(L["Options"])
     optTitle:SetTextColor(1, 0.9, 0.5)
     p.optWidgets[#p.optWidgets + 1] = optTitle
 
@@ -690,9 +690,9 @@ local function CreateIOPanel()
         return cb
     end
 
-    local lockCb    = addOpt("Lock frame position", -4)
-    local rangeCb   = addOpt("Range-only (hide out-of-range classes)", -30)
-    local verboseCb = addOpt("Verbose output", -56)
+    local lockCb    = addOpt(L["Lock frame position"], -4)
+    local rangeCb   = addOpt(L["Range-only (hide out-of-range classes)"], -30)
+    local verboseCb = addOpt(L["Verbose output"], -56)
 
     lockCb:SetScript("OnClick", function(self)
         db.locked = self:GetChecked() and true or false
@@ -772,19 +772,19 @@ local function GetOrCreateClassRow(classToken)
                 GameTooltip:AddLine(sn, 1, 1, 0)
                 local nextUID = self._nextUID
                 if nextUID then
-                    GameTooltip:AddLine("Next: " .. (UnitName(nextUID) or nextUID), 0.8, 0.8, 1)
+                    GameTooltip:AddLine(string.format(L["Next: %s"], UnitName(nextUID) or nextUID), 0.8, 0.8, 1)
                     local e = buffStatus[nextUID]
                     if e and e[i] and e[i].expiry then
                         local rem = math.max(0, math.floor(e[i].expiry - GetTime()))
                         GameTooltip:AddLine(
-                            string.format("Expires in: %dm %ds", math.floor(rem / 60), rem % 60),
+                            string.format(L["Expires in: %dm %ds"], math.floor(rem / 60), rem % 60),
                             1, 0.8, 0)
                     end
                 else
-                    GameTooltip:AddLine("Everyone buffed!", 0.5, 1, 0.5)
+                    GameTooltip:AddLine(L["Everyone buffed!"], 0.5, 1, 0.5)
                 end
             end
-            GameTooltip:AddLine("|cffaaaaaa(Mousewheel to change class assignment)|r")
+            GameTooltip:AddLine(L["TT mousewheel"])
             GameTooltip:Show()
         end)
         btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -795,7 +795,7 @@ local function GetOrCreateClassRow(classToken)
     -- Mousewheel â†’ cycle this class's buff assignment
     row:SetScript("OnMouseWheel", function(self, delta)
         if InCombatLockdown() then
-            print("|cffFFD700CoaPower|r: cannot change config during combat.")
+            print("|cffFFD700CoaPower|r: " .. L["no config in combat"])
             return
         end
         CycleActiveSpell(self._classToken)
@@ -945,7 +945,7 @@ UpdateUI = function()
         end
         local mark = expandedClasses[token] and "\226\150\188 " or "\226\150\182 "
         if not anyEnabled then
-            row.lbl:SetText(mark .. className .. " |cff888888(off)|r")
+            row.lbl:SetText(mark .. className .. " " .. L["(off)"])
         elseif totalNeeding > 0 then
             row.lbl:SetText(mark .. string.format("%s |cffffff00(%d)|r", className, totalNeeding))
         else
@@ -1156,8 +1156,8 @@ local function CreateUI()
     end)
     cfgBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Buff Config", 1, 1, 0)
-        GameTooltip:AddLine("Opens Interface → AddOns → CoaPower", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine(L["Buff Config"], 1, 1, 0)
+        GameTooltip:AddLine(L["TT open IO"], 0.7, 0.7, 0.7)
         GameTooltip:Show()
     end)
     cfgBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1207,6 +1207,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 end
             end
             db = CoaPowerDB
+            L  = CoaPowerL
             CreateIOPanel()
             -- Migrate old integer classConfig format (0..3) to boolean array
             if db.classConfig then
@@ -1288,24 +1289,21 @@ SlashCmdList["COAPOWER"] = function(msg)
         if mainFrame then
             if mainFrame:IsShown() then mainFrame:Hide() else mainFrame:Show() end
         else
-            print("|cffFFD700CoaPower|r: not active for class '" ..
-                  (casterClass or "unknown") .. "'. Use /sb addspell <name>.")
+            print("|cffFFD700CoaPower|r: " .. string.format(L["not active for class"], casterClass or "unknown"))
         end
 
     elseif cmd == "lock" then
         db.locked = not db.locked
-        CoaPrint("|cffFFD700CoaPower|r: frame " ..
-              (db.locked and "|cffff9900locked|r" or "|cff00ff00unlocked|r"))
+        CoaPrint("|cffFFD700CoaPower|r: " .. (db.locked and L["frame locked"] or L["frame unlocked"]))
 
     elseif cmd == "range" then
         db.rangeOnly = not db.rangeOnly
-        CoaPrint("|cffFFD700CoaPower|r: out-of-range rows " ..
-              (db.rangeOnly and "|cff00ff00hidden|r" or "|cffffff00greyed out|r"))
+        CoaPrint("|cffFFD700CoaPower|r: " .. (db.rangeOnly and L["range hidden"] or L["range greyed"]))
         if isActive then UpdateUI() end
 
     elseif cmd == "addspell" then
         if arg == "" then
-            print("|cffFFD700CoaPower|r: usage: /sb addspell <spell name>")
+            print("|cffFFD700CoaPower|r: " .. L["usage addspell"])
             return
         end
         if not casterClass then return end
@@ -1313,7 +1311,7 @@ SlashCmdList["COAPOWER"] = function(msg)
         db.spellsByClass[casterClass] = db.spellsByClass[casterClass] or {}
         for _, s in ipairs(db.spellsByClass[casterClass]) do
             if s == arg then
-                print("|cffFFD700CoaPower|r: '" .. arg .. "' already tracked.")
+                print("|cffFFD700CoaPower|r: " .. string.format(L["already tracked"], arg))
                 return
             end
         end
@@ -1331,13 +1329,13 @@ SlashCmdList["COAPOWER"] = function(msg)
             ScanSpellbook()
             ScanAll()
         end
-        CoaPrint("|cffFFD700CoaPower|r: tracking '" .. arg .. "'")
+        CoaPrint("|cffFFD700CoaPower|r: " .. string.format(L["now tracking"], arg))
         UpdateUI()
 
     elseif cmd == "removespell" then
         local idx = tonumber(arg)
         if not idx or not casterClass then
-            print("|cffFFD700CoaPower|r: usage: /sb removespell <1|2>")
+            print("|cffFFD700CoaPower|r: " .. L["usage removespell"])
             return
         end
         local list = db.spellsByClass and db.spellsByClass[casterClass]
@@ -1345,18 +1343,18 @@ SlashCmdList["COAPOWER"] = function(msg)
             local removed = list[idx]
             table.remove(list, idx)
             ScanSpellbook()
-            CoaPrint("|cffFFD700CoaPower|r: removed '" .. removed .. "'")
+            CoaPrint("|cffFFD700CoaPower|r: " .. string.format(L["removed spell"], removed))
             if isActive then ScanAll(); UpdateUI() end
         else
-            print("|cffFFD700CoaPower|r: no custom spell at index " .. idx)
+            print("|cffFFD700CoaPower|r: " .. string.format(L["no spell at index"], idx))
         end
 
     elseif cmd == "spells" then
         if #spells == 0 then
-            print("|cffFFD700CoaPower|r: no spells tracked for " .. (casterClass or "?"))
-            print("  Use /sb addspell <name> to configure.")
+            print("|cffFFD700CoaPower|r: " .. string.format(L["no spells tracked"], casterClass or "?"))
+            print(L["use addspell hint"])
         else
-            print("|cffFFD700CoaPower|r: tracking for " .. (casterClass or "?") .. ":")
+            print("|cffFFD700CoaPower|r: " .. string.format(L["tracking for"], casterClass or "?"))
             for i, s in ipairs(spells) do
                 print(string.format("  [%d] %s", i, s))
             end
@@ -1365,17 +1363,16 @@ SlashCmdList["COAPOWER"] = function(msg)
     elseif cmd == "reset" then
         if db.classConfig then
             db.classConfig = {}
-            CoaPrint("|cffFFD700CoaPower|r: all class buff assignments reset to default.")
+            CoaPrint("|cffFFD700CoaPower|r: " .. L["reset done"])
             if isActive then UpdateUI() end
         end
 
     elseif cmd == "verbose" then
         db.verbose = not db.verbose
-        print("|cffFFD700CoaPower|r: verbose " ..
-              (db.verbose and "|cff00ff00on|r" or "|cffff6666off|r"))
+        print("|cffFFD700CoaPower|r: " .. (db.verbose and L["verbose on"] or L["verbose off"]))
 
     elseif cmd == "config" or cmd == "cfg" then
-        if not isActive then print("|cffFFD700CoaPower|r: not active."); return end
+        if not isActive then print("|cffFFD700CoaPower|r: " .. L["not active short"]); return end
         if configFrame and configFrame:IsShown() then
             configFrame:Hide()
         else
@@ -1384,15 +1381,15 @@ SlashCmdList["COAPOWER"] = function(msg)
 
     else
         print("|cffFFD700CoaPower|r commands:")
-        print("  /cp                    â€” toggle window")
-        print("  /cp lock               â€” lock / unlock frame position")
-        print("  /cp range              â€” toggle hide vs grey out-of-range rows")
-        print("  /cp addspell <name>    â€” track a new buff spell")
-        print("  /cp removespell <N>    â€” remove custom spell by slot index")
-        print("  /cp spells             â€” list currently tracked spells")
-        print("  /cp reset              â€” reset all class buff assignments to default")
-        print("  /cp config             \226\128\148 open / close buff config matrix")
-        print("  /cp verbose            \226\128\148 toggle confirmation messages on/off")
-        print("  Mousewheel on class row \226\128\148 toggle all spells on/off for that class")
+        print(L["help 01"])
+        print(L["help 02"])
+        print(L["help 03"])
+        print(L["help 04"])
+        print(L["help 05"])
+        print(L["help 06"])
+        print(L["help 07"])
+        print(L["help 08"])
+        print(L["help 09"])
+        print(L["help 10"])
     end
 end
